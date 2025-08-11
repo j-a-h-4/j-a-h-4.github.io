@@ -1,58 +1,36 @@
-// server.js
-require('dotenv').config();
 const express = require('express');
-const fetch = require('node-fetch');
+const fs = require('fs');
 const path = require('path');
-
-const OMDB_KEY = process.env.OMDB_API_KEY;
-if (!OMDB_KEY) {
-  console.error('❌ Missing OMDB_API_KEY in .env file');
-  process.exit(1);
-}
+const bodyParser = require('body-parser');
+const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
+const DATA_FILE = path.join(__dirname, 'submissions.csv');
 
-app.use(express.static(path.join(__dirname, 'public')));
+// Middleware
+app.use(cors());
+app.use(bodyParser.json());
+app.use(express.static('public'));
 
-// Search OMDb by title
-app.get('/api/search', async (req, res) => {
-  const { q, type } = req.query;
-  if (!q) return res.status(400).json({ error: 'Missing search query (q)' });
+// Append data to CSV
+function appendToCSV(name, title) {
+    const line = `"${name}","${title}"\n`;
+    fs.appendFileSync(DATA_FILE, line, 'utf8');
+}
 
-  try {
-    const url = new URL('http://www.omdbapi.com/');
-    url.searchParams.set('apikey', OMDB_KEY);
-    url.searchParams.set('s', q);
-    if (type) url.searchParams.set('type', type);
+// Handle form submission
+app.post('/submit', (req, res) => {
+    const { name, movie } = req.body;
 
-    const r = await fetch(url.toString());
-    const data = await r.json();
-    res.json(data);
-  } catch (err) {
-    res.status(500).json({ error: 'Error fetching from OMDb' });
-  }
-});
+    if (!name || !movie) {
+        return res.status(400).json({ message: 'Name and movie/show are required' });
+    }
 
-// Get OMDb details by IMDb ID
-app.get('/api/title', async (req, res) => {
-  const { i } = req.query;
-  if (!i) return res.status(400).json({ error: 'Missing IMDb ID (i)' });
-
-  try {
-    const url = new URL('http://www.omdbapi.com/');
-    url.searchParams.set('apikey', OMDB_KEY);
-    url.searchParams.set('i', i);
-    url.searchParams.set('plot', 'short');
-
-    const r = await fetch(url.toString());
-    const data = await r.json();
-    res.json(data);
-  } catch (err) {
-    res.status(500).json({ error: 'Error fetching from OMDb' });
-  }
+    appendToCSV(name, movie);
+    res.json({ message: 'Submission saved successfully' });
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ Server running at http://localhost:${PORT}`);
+    console.log(`Server running at http://localhost:${PORT}`);
 });
